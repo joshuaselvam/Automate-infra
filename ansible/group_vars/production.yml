@@ -1,0 +1,31 @@
+app_env: production
+
+#SSH KEYS
+docker_authorized_ssh_keys: []
+
+#Mongo DB
+mongo_hostname: mongo.app.local
+os_user: mongodb
+mongo_admin_user: admin
+mongo_admin_pass: Devops123
+mongo_packages:
+    - mongodb-org=4.0.10
+    - mongodb-org-server=4.0.10
+    - mongodb-org-shell=4.0.10
+    - mongodb-org-mongos=4.0.10
+    - mongodb-org-tools=4.0.10
+mongo_databases:
+    - {name: 'mongodb', port: 27017, cacheSizeGB: 2.0 }
+
+# Docker and Image Registry   
+docker_edition: ce    
+docker_registry_hostname: docker.registry.com:5000
+s3_region: ap-south-1 # Registry S3 Region
+s3_bucketname: dockerregistry18122108 # Bucket Name to Store Images
+
+# Traefik
+letsencrypt: True
+letsencrypt_email: testsecretagentx@gmail.com
+traefik_https: False
+domains_tld: testservice.in
+domains_tld_local: testservice.local

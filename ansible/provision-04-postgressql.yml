@@ -1,0 +1,11 @@
+---
+  - name: Install Postgres SQL and Configure
+    hosts: 
+      - mongo_main_server
+    become: yes
+    become_method: sudo
+    gather_facts: yes
+    roles:
+      - ansible-role-postgresql
+
+

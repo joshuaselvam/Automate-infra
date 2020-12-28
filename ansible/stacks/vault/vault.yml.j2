@@ -1,0 +1,54 @@
+version: '3.7'
+networks:
+    traefik:
+      driver: overlay
+      external: true
+services:
+  vault:
+    image: vault
+    networks:
+        - traefik
+    command: server
+    environment:
+      - VAULT_ADDR=http://0.0.0.0:7200
+      - VAULT_API_ADDR=http://0.0.0.0:7200
+      - VAULT_LOCAL_CONFIG={"backend":{"consul":{"address":"http://consul:8500","path":"vault/"}},"listener":{"tcp":{"address":"0.0.0.0:7200","tls_disable":1}},"ui":true, "disable_mlock":true}
+    deploy:
+      replicas: 1
+      labels:
+        - manager.service=true
+        - traefik.enable=true
+        - traefik.tags=traefik-prod
+        - traefik.docker.network=traefik
+        - traefik.http.routers.vault.entrypoints=prodhttps
+        - traefik.http.routers.vault.middlewares=oauth01
+        - traefik.http.routers.vault.service=vault
+        - traefik.http.services.vault.loadbalancer.server.port=7200
+        - traefik.http.routers.vault.rule=Host(`vault.{{ domains_tld }}`)
+        - traefik.http.routers.vault.tls=true
+        - traefik.http.routers.vault.tls.certresolver=letsencrypt
+        - traefik.http.routers.vault_internal.rule=Host(`vault.{{ domains_tld_local }}`)
+        - traefik.http.routers.vault_internal.entrypoints=prodhttp
+        - traefik.http.routers.vault_internal.service=vault
+      placement:
+        constraints:
+          - node.role==manager
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      rollback_config:
+        order: stop-first
+        parallelism: 0
+      update_config:
+        delay: 10s
+        order: start-first
+        parallelism: 1
+      resources:
+        limits:
+          cpus: '0.80'
+          memory: 1024M
+        reservations:
+          cpus: '0.20'
+          memory: 512M  

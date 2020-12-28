@@ -1,0 +1,59 @@
+version: '3.7'
+configs:
+  coreconfig:
+    file: ./Corefile.j2
+  pubdomainconfig:
+    file: ./pub_domain.j2
+  localdomainconfig:
+    file: ./local_domain.j2
+services:
+  coredns:
+    image: dhileepbalaji/coredns
+    configs:
+      - source: coreconfig
+        target: /etc/coredns/Corefile
+      - source: pubdomainconfig
+        target: /etc/coredns/{{ domains_tld }}
+      - source: localdomainconfig
+        target: /etc/coredns/{{ domains_tld_local }}
+    deploy:
+      labels:
+        - manager.service=true  
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      rollback_config:
+        order: stop-first
+        parallelism: 0
+      update_config:
+        delay: 10s
+        order: start-first
+        parallelism: 1
+      resources:
+        limits:
+          cpus: '0.80'
+          memory: 1024M
+        reservations:
+          cpus: '0.20'
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-file: 5
+        max-size: 50m
+    ports:
+      - target: 53
+        published: 53
+        mode: host
+        protocol: udp
+      - target: 53
+        published: 53
+        mode: host
+        protocol: tcp

@@ -1,0 +1,167 @@
+##
+# traefik stack
+##
+# This file is a Jinja2 template
+# Which means you can use variables defined in group_vars here
+# @see https://docs.ansible.com/ansible/latest/user_guide/playbooks_templating.html
+##
+version: "3.7"
+volumes:
+  letsencrypt:
+
+networks:
+  traefik:
+    driver: overlay
+    external: true
+  apps:
+    driver: overlay
+    external: true # this network is created by Ansible, because it is shared by multiple stacks
+  apps_dev:
+    driver: overlay
+    external: true # this network is created by Ansible, because it is shared by multiple stacks
+
+
+services:
+  middlewares:
+    image: "containous/whoami"
+    networks:
+      - traefik
+    deploy:
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.whoami.rule=Host(`whoami.{{ domains_tld }}`)"
+        - "traefik.http.routers.whoami.entrypoints=prodhttps"
+        - traefik.tags=traefik-prod
+        - traefik.docker.network=traefik
+        - traefik.http.routers.whoami.service=whoami
+        - traefik.http.services.whoami.loadbalancer.server.port=80
+        - traefik.http.routers.whoami.tls=true
+        - traefik.http.routers.whoami.middlewares=ratelimit_prod
+        - traefik.http.routers.whoami.tls.certresolver=letsencrypt
+        - traefik.http.middlewares.gccmedtrack.stripprefix.prefixes=/medicaltracker
+        - traefik.http.middlewares.covid_postive.stripprefix.prefixes=/positive
+        - traefik.http.middlewares.ratelimit_dev.ratelimit.average=20
+        - traefik.http.middlewares.ratelimit_dev.ratelimit.burst=30
+        - traefik.http.middlewares.ratelimit_dev.ratelimit.sourcecriterion.ipstrategy.depth=42
+        - traefik.http.middlewares.ratelimit_prod.ratelimit.average=20
+        - traefik.http.middlewares.ratelimit_prod.ratelimit.burst=30
+        - traefik.http.middlewares.ratelimit_prod.ratelimit.sourcecriterion.ipstrategy.depth=42
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      rollback_config:
+        order: stop-first
+        parallelism: 0
+      update_config:
+        delay: 10s
+        order: start-first
+        parallelism: 1
+      resources:
+        limits:
+          cpus: '0.80'
+          memory: 1024M
+        reservations:
+          cpus: '0.20'
+          memory: 512M
+
+  traefikv2:
+    command:
+      - --entrypoints.prodhttp.forwardedheaders.insecure=true
+      - --entrypoints.prodhttps.forwardedheaders.insecure=true
+      - "--entryPoints.prodhttp.address=0.0.0.0:80"
+      - "--entryPoints.prodhttps.address=0.0.0.0:443"
+      - '--providers.providersThrottleDuration=2s'
+      - "--providers.docker=true"
+      - "--providers.docker.network=traefik"
+      - "--providers.docker.watch=true"
+      - "--providers.docker.swarmMode=true"
+      - "--providers.docker.swarmModeRefreshSeconds=15s"
+      - "--providers.docker.exposedbydefault=false"
+      - --providers.docker.constraints=Label("traefik.tags","traefik-prod")
+      - --providers.docker.defaultRule=Host("local.me")
+      - "--accessLog.bufferingSize=0"
+      - "--api.dashboard=true"
+      - "--log.level=INFO"
+      - "--accesslog=true"
+      - '--api.insecure=false'
+      - '--ping.entryPoint=prodhttp'
+      - --metrics.prometheus=true
+      - --metrics.prometheus.entryPoint=metrics
+      - --entryPoints.metrics.address=:8082
+{% if letsencrypt %} # you can also use conditional statements
+      - "--certificatesResolvers.letsencrypt.acme.email={{letsencrypt_email}}"
+      - "--certificatesResolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesResolvers.letsencrypt.acme.httpChallenge=true"
+      - "--certificatesResolvers.letsencrypt.acme.httpChallenge.entryPoint=prodhttp"
+{% endif %}
+    deploy:
+      labels:
+        - manager.service=true
+        - traefik.enable=true
+        - traefik.tags=traefik-prod
+        - traefik.docker.network=traefik
+        - traefik.http.routers.traefikmetrics.entrypoints=prodhttp
+        - traefik.http.routers.traefikmetrics.rule=Host(`traefikmetrics.{{ domains_tld }}`)
+        - traefik.http.routers.traefikmetrics.service=traefikmetrics
+        - traefik.http.services.traefikmetrics.loadbalancer.server.port=8082
+        - traefik.http.routers.dashboard.middlewares=oauth01
+        - traefik.http.routers.dashboard.entrypoints=prodhttps
+        - traefik.http.routers.dashboard.service=api@internal
+        - traefik.http.services.dashboard.loadbalancer.server.port=8080
+        - traefik.http.routers.dashboard.rule=Host(`traefik.{{ domains_tld }}`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))
+        - traefik.http.routers.dashboard.tls=true
+        - traefik.http.routers.dashboard.tls.certresolver=letsencrypt
+        
+      mode: global
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      rollback_config:
+        order: stop-first
+        parallelism: 0
+      update_config:
+        delay: 10s
+        order: start-first
+        parallelism: 1
+      resources:
+        limits:
+          cpus: '0.80'
+          memory: 1024M
+        reservations:
+          cpus: '0.20'
+          memory: 512M
+
+    image: "traefik:v2.2"
+    logging:
+      driver: json-file
+      options:
+        max-file: 5
+        max-size: 50m
+    networks:
+      - traefik
+      - apps
+      - apps_dev
+    ports:
+      - target: 80
+        published: 80
+        mode: host
+      - target: 443
+        published: 443
+        mode: host
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "letsencrypt:/letsencrypt"
+
+version: "3.7"
+
+  

@@ -1,0 +1,137 @@
+# Infra Setup and Details:
+
+The Infrastructure is configured  using Opensource IAAC and Configuration management tools and hosted in AWS.
+
+## Summary:
+- **Terraform** to create  cloud infrastructure
+- **Ansible** to provision Virtual Machines and set up the **Docker Swarm** cluster
+- **Ansible** again to deploy docker stacks
+
+#### Infra Tech Stack:
+
+|  Cloud |  AWS   |
+| ------------ | ------------ |
+| IAAC  | [Terraform](https://www.terraform.io/ "Terraform") |
+| Configuration Management  | [Ansible](https://www.ansible.com/ "Ansible") |
+| Container Engine  | [Docker](https://www.docker.com/ "Docker")  |
+|  Container Orchestration  |  [Docker-Swarm](https://docs.docker.com/engine/swarm/ "Docker-Swarm") |
+| Reverse Proxy  |  [Traefik](https://containo.us/traefik/ "Traefik") |
+| SSL   |  [LetsEncrypt](https://letsencrypt.org/ "LetsEncrypt") |
+| CI/CD   | [GoCD](https://www.gocd.org/ "GoCD") |
+
+## Configuration Files:
+
+- `ansible/group_vars/all.yml`  S3-Bucket,Traefik,letsencrypt and other global varaibles for all environments are defined here.
+- `ansible/group_vars/production.yml`  Variables defined in **ansible/group_vars/all.yml** can be overridden  and production specific variables can be defined here.
+- `ansible/group_vars/production_encrypted.yml`  Variables that contains secrets can be placed here and encrypted using Ansible Vault.
+- `terraform/environments/production/main.yml `  Here we define the Number of Manager nodes, Worker Nodes, S3 bucket,VPC and other resource related configs.
+
+## Steps to Setup Infra :
+**Requirements:**   Run the below steps in linux machine as root user.
+- Git clone this repo `git clone https://github.com/dhileepbalaji/docker-swarm-terraform-ansible.git`
+
+- Run below steps to configure IAM credentials
+```sh
+# cd docker-swarm-terraform-ansible/
+#  export AWS_SECRET_ACCESS_KEY="XXX"
+#  export AWS_ACCESS_KEY_ID="YYY"
+```
+**Note:** I have deliberately added space before export command so that keys will not be saved in bash history.
+
+- Run `./infra-automation terraform production init` to download plugins needed for terraform
+- Make neccesary changes in `terraform/environments/production/main.yml`
+  -   swarm_manager_nodes           = 1
+  - swarm_worker_nodes            = 0
+  - aws_nodes_instance_type       = "t2.large"
+  - s3bucket                      = "dockerregistry18122108"
+  - root_block_device             = [{volume_size="30",encrypted="true"}]
+  - ssh_pubkey_path               = "~/.ssh/id_rsa.pub"
+ ** Note:** `ssh_pubkey_path` You should generate ssh-keypair using `ssh-keygen` and specify pub key file name here. Please keep the private key safely since its the only way to login to server.
+
+
+- Run Validation to check config Syntax
+```sh
+# ./infra-automation terraform production validate
+.....
+.....
+Success! The configuration is valid.
+```
+- Run Terraform Plan to see the changes before applying.
+```sh
+#  ./infra-automation terraform production plan
+.......
+.......
+Plan: 19 to add, 0 to change, 0 to destroy.
+```
+- Run Terraform apply and give `yes` to create resources.
+```sh
+# ./infra-automation terraform production apply
+....
+....
+....
+Apply complete! Resources: 19 added, 0 changed, 0 destroyed.
+....
+Generating Ansible inventory from Terraform outputs...
+.....
+Inventory file generated: /opt/devops/docker-swarm-terraform-ansible/ansible/inventories/production
+```
+- Now resources are created in AWS. Go to AWS console and choose `ap-south-1` region to view the created resources
+
+- Check Connectivity to EC2 Instances with below commands.
+```sh
+# export ANSIBLE_HOST_KEY_CHECKING=False
+# ./infra-automation ansible production docker -m ping
+.....
+.....
+"ping": "pong"
+```
+## Steps to Configure Infra:
+
+- Make neccesary changes in `ansible/group_vars/all.yml`
+  ```sh
+  #Mongo DB parameters
+os_user: mongodb
+mongo_admin_user: admin
+mongo_admin_pass: Devops123 #Change the password
+mongo_packages:
+    - mongodb-org=4.0.10
+    - mongodb-org-server=4.0.10
+    - mongodb-org-shell=4.0.10
+    - mongodb-org-mongos=4.0.10
+    - mongodb-org-tools=4.0.10
+mongo_databases:
+    - {name: 'mongodb', port: 27017, cacheSizeGB: 2.0 }
+#S3 Bucket Settings for Docker Registry
+s3_region: ap-south-1
+s3_bucketname:  dockerregistry18122108 # Use S3 Bucket name created in Terraform
+#Docker registry
+docker_registry_hostname: registry.app.local 
+letsencrypt: False # enable if you need SSL certs
+traefik_https: False# enable if you need https
+docker_authorized_ssh_keys: [] # Add additional ssh-public keys for authentication```
+
+- Above variables can be overriden in `ansible/group_vars/production.yml`
+- `ansible/group_vars/production_encrypted.yml` keep your sensitive variables in this file.
+
+- Run below command to create ansible vault secret.
+```sh
+# ./infra-automation ansible-vault production init-key
+A new key has been generated in /opt/devops/docker-swarm-terraform-ansible/ansible/vault_keys/production
+ - keep this key secret
+ - do not commit it
+ - share it securely to your other authorized team members
+ - do not lost it, you would not be able to decrypt your files!```
+
+- Run below command to encrypt the files
+```sh
+# ./infra-automation ansible-vault production encrypt ansible/group_vars/all.yml
+....
+Encryption successful
+```
+- Run below command to check ansible syntax.
+```sh
+# ./infra-automation ansible-playbook production all  --syntax-check
+```
+**Note:** Ignore the warnings related to host matching.
+
+- Run below command to setup Docker Swarm,MongoDB, Traefik and GoCD

@@ -1,0 +1,55 @@
+## OAuth - Forward Authentication
+version: "3.7"
+services:
+  oauth:
+    image: thomseddon/traefik-forward-auth:2
+    container_name: oauth
+    hostname: oauth
+    restart: always
+    networks:
+      - traefik
+    environment:
+      PROVIDERS_GOOGLE_CLIENT_ID: 
+      PROVIDERS_GOOGLE_CLIENT_SECRET: 
+      SECRET: 
+      COOKIE_DOMAIN: 
+      INSECURE_COOKIE: "false"
+      AUTH_HOST: 
+      URL_PATH: /_oauth
+      WHITELIST: 
+      LOG_LEVEL: debug
+      LIFETIME: 2592000 # 30 days
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+      update_config:
+        parallelism: 1
+        delay: 30s
+      restart_policy:
+        condition: any
+        delay: 10s
+      replicas: 1
+
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=traefik
+        - traefik.tags=traefik-prod
+        - traefik.http.routers.oauth.tls=true
+        - traefik.http.routers.oauth.tls.certresolver=letsencrypt
+        - traefik.http.routers.oauth.entrypoints=prodhttps
+        - traefik.http.routers.oauth.service=oauth
+        - traefik.http.routers.oauth.rule=Host(`oauth.{{ domains_tld }}`)
+        - traefik.http.routers.oauth.middlewares=ratelimit_prod,oauth01
+        - traefik.http.services.oauth.loadbalancer.server.port=4181
+        - traefik.http.services.oauth.loadbalancer.passhostheader=true
+        - "traefik.http.middlewares.oauth01.forwardauth.address=http://oauth:4181"
+        - traefik.http.middlewares.oauth01.forwardauth.authresponseheaders=X-Forwarded-User
+        - traefik.http.middlewares.oauth01.forwardauth.trustforwardheader=true
+
+  
+networks:
+  traefik:
+    driver: overlay
+    external: true
+

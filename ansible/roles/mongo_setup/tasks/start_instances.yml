@@ -1,0 +1,13 @@
+---
+- name: Stop Instances
+  service: name=mongodb state=stopped 
+  register: command_result
+  become: yes
+  ignore_errors: yes
+
+
+- name: Start Instances
+  service: name=mongodb state=started
+  become: yes
+
+

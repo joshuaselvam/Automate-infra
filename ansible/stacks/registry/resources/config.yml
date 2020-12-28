@@ -1,0 +1,19 @@
+version: 0.1
+log:
+  level: "debug"
+  formatter: "json"
+  fields:
+    service: "registry"
+storage:
+  cache:
+    blobdescriptor: "inmemory"
+  s3:
+    region: "{{ s3_region }}"
+    bucket: "{{ s3_bucketname }}"
+http:
+  addr: ":5000"
+health:
+  storagedriver:
+    enabled: true
+    interval: "10s"
+    threshold: 3

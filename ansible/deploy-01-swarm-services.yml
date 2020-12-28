@@ -1,0 +1,82 @@
+---
+###
+# deploy playbook
+##
+# In this file, you should:
+#  - Create global overlay networks which are shared between stacks (eg. the traefik one)
+#  - Define your stacks with the "docker-stack" role
+#
+# You can use tags, so you can deploy only one stack
+# Example: ./infra-automation ansible-playbook production deploy --tags stack-traefik
+##
+
+- hosts: dockerswarm_manager[0] # executed on the first Swarm manager
+  pre_tasks:
+    - name: Create Docker traefik/apps network
+      docker_network:
+        name: apps
+        driver: overlay
+    - name: Create Docker traefik/apps network
+      docker_network:
+        name: traefik
+        driver: overlay
+    - name: Create Docker traefik/apps network DEV
+      docker_network:
+        name: apps_dev
+        driver: overlay
+    - name: Create Docker traefik/apps network DEV
+      docker_network:
+        name: traefik_dev
+        driver: overlay
+
+# Deploy Stacks
+  roles:
+    # CORE DNS
+    - role: docker-stack
+      tags:
+        - stack-coredns
+      vars:
+        docker_stack_name: vault
+    # TRAEFIK PROD
+    - role: docker-stack
+      tags:
+        - stack-traefik
+      vars:
+        docker_stack_name: traefik
+    # TRAEFIK-OAUTH
+    - role: docker-stack
+      tags:
+        - stack-traefik-oauth
+      vars:
+        docker_stack_name: traefik_oauth
+    # SWARMPIT
+    - role: docker-stack
+      tags:
+        - stack-swarmpit
+      vars:
+        docker_stack_name: swarmpit
+    # GOCD
+    - role: docker-stack
+      tags:
+        - stack-gocd
+      vars:
+        docker_stack_name: gocd
+    # DOCKER REGISTRY
+    - role: docker-stack
+      tags:
+        - stack-registry
+      vars:
+        docker_stack_name: registry
+    # HASHICORP CONSUL
+    - role: docker-stack
+      tags:
+        - stack-consul
+      vars:
+        docker_stack_name: consul
+    # HASHICORP VAULT
+    - role: docker-stack
+      tags:
+        - stack-vault
+      vars:
+        docker_stack_name: vault
+

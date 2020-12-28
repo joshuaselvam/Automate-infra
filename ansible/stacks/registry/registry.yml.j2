@@ -1,0 +1,39 @@
+version: "3.7"
+services:
+  registry:
+    environment:
+      - REGISTRY_STORAGE_DELETE_ENABLED=true
+    image: "registry:latest"
+    networks:
+      - traefik
+    ports:
+      - 5000:5000
+    volumes:
+      - "./config.yml:/etc/docker/registry/config.yml:ro"
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+      update_config:
+        parallelism: 1
+        delay: 30s
+      restart_policy:
+        condition: any
+        delay: 10s
+      replicas: 1
+      labels:
+        - manager.service=true
+        - traefik.tags=traefik-prod
+        - traefik.http.routers.registry.entrypoints=prodhttp
+        - traefik.http.routers.registry.rule=Host(`{{docker_registry_hostname}}`) 
+        - traefik.enable=true
+        - traefik.http.routers.registry.service=registry
+        - traefik.http.services.registry.loadbalancer.server.port=5000
+        - traefik.docker.network=traefik
+        - traefik.http.routers.registry.tls=false
+
+networks:
+  traefik:
+    driver: overlay
+    external: true
+

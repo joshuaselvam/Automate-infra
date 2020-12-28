@@ -1,0 +1,11 @@
+- name: Copy config of mongod
+  template: 
+    src: mongod.conf.j2
+    dest: "/etc/mongodb.conf"
+  vars:
+    name: "{{ item.name }}"
+    port: "{{ item.port }}"
+    cacheSizeGB: "{{ item.cacheSizeGB }}"
+  with_items: "{{ mongo_databases }}"
+  become: yes 
+

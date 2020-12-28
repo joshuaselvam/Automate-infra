@@ -1,0 +1,29 @@
+version: "3.7"
+volumes:
+  consul-data:
+networks:
+    traefik:
+      driver: overlay
+      external: true
+services:
+  consul:
+    image: consul
+    command: agent -server -bootstrap-expect=1
+    volumes:
+      - consul-data:/consul/data
+    environment:
+      - CONSUL_LOCAL_CONFIG={"datacenter":"swarm","server":true}
+      - CONSUL_BIND_INTERFACE=eth0
+      - CONSUL_CLIENT_INTERFACE=eth0
+    deploy:
+      labels:
+        - "manager.service=true"
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+    networks:
+      - traefik
+

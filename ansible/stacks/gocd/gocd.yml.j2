@@ -1,0 +1,94 @@
+##
+# gocd stack
+##
+# This file is a Jinja2 template
+# Which means you can use variables defined in group_vars here
+# @see https://docs.ansible.com/ansible/latest/user_guide/playbooks_templating.html
+##
+version: "3.7"
+secrets:
+  vault-dev:
+    external: true
+  vault-prod:
+    external: true
+volumes:
+  go_server_data:
+    
+networks:
+  traefik:
+    driver: overlay
+    external: true
+ 
+services:
+  # GOCD
+  # Master to be deployed in Swarm manager node
+  gocd-server:
+    image: dhileepbalaji/gocd-server 
+    networks:
+      - traefik
+    volumes:
+      - go_server_data:/godata
+    deploy:
+      labels:
+        - manager.service=true
+        - traefik.enable=true
+        - traefik.tags=traefik-prod
+        - traefik.docker.network=traefik
+        - traefik.http.routers.cicd.entrypoints=prodhttps
+        - traefik.http.routers.cicd.tls=true
+        - traefik.http.routers.cicd.tls.certresolver=letsencrypt
+        - traefik.http.routers.cicd.rule=Host(`gocd.{{ domains_tld }}`) 
+        - traefik.http.routers.cicd.service=cicd
+        - traefik.http.services.cicd.loadbalancer.server.port=8153
+
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 30s
+      restart_policy:
+        condition: any
+        delay: 10s
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '0.80'
+          memory: 1024M
+        reservations:
+          cpus: '0.10'
+          memory: 20M
+  go-agent:
+    image: dhileepbalaji/gocd-agent 
+    environment:
+      GO_SERVER_URL: https://gocd-server:8154/go
+    networks:
+      - traefik
+    volumes: 
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    deploy:
+      labels:
+        - manager.service=true
+      mode: replicated
+      replicas: 2 
+      placement:
+        constraints:
+          - node.role == manager
+      update_config:
+        parallelism: 1
+        delay: 30s
+      restart_policy:
+        condition: any
+        delay: 10s
+      resources:
+        limits:
+          cpus: '0.80'
+          memory: 1024M
+    secrets:
+      - source: vault-dev
+        target: vault-dev
+        mode: 0444
+      - source: vault-prod
+        target: vault-prod
+        mode: 0444
+ 

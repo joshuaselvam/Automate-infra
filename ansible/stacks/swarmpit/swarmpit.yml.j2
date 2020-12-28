@@ -1,0 +1,104 @@
+version: '3.7'
+
+services:
+  swarmpit:
+    image: swarmpit/swarmpit:latest
+    environment:
+      - SWARMPIT_DB=http://couchdb:5984
+      - SWARMPIT_INFLUXDB=http://influxdb:8086
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - traefik
+    deploy:
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=traefik
+        - traefik.tags=traefik-prod
+        - traefik.http.routers.swarmpit.tls=true
+        - traefik.http.routers.swarmpit.tls.certresolver=letsencrypt
+        - traefik.http.routers.swarmpit.entrypoints=prodhttps
+        - traefik.http.routers.swarmpit.service=swarmpit
+        - traefik.http.routers.swarmpit.rule=Host(`ddc.{{ domains_tld }}`)
+        - traefik.http.routers.swarmpit.middlewares=oauth01
+        - traefik.http.services.swarmpit.loadbalancer.server.port=8080
+        - traefik.http.services.swarmpit.loadbalancer.passhostheader=true
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 1024M
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+      placement:
+        constraints:
+          - node.role == manager
+
+  couchdb:
+    image: couchdb:2.3.0
+    volumes:
+      - db-data:/opt/couchdb/data
+    networks:
+      - traefik
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '0.30'
+          memory: 256M
+        reservations:
+          cpus: '0.15'
+          memory: 128M
+
+  influxdb:
+    image: influxdb:1.7
+    volumes:
+      - influx-data:/var/lib/influxdb
+    networks:
+      - traefik
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '0.60'
+          memory: 512M
+        reservations:
+          cpus: '0.30'
+          memory: 128M
+
+  swarmpitagent:
+    image: swarmpit/agent:latest
+    environment:
+      - DOCKER_API_VERSION=1.40
+      - HEALTH_CHECK_ENDPOINT=http://swarmpit:8080/version
+      - EVENT_ENDPOINT=http://swarmpit:8080/events
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - traefik
+    deploy:
+      mode: global
+      labels:
+        swarmpit.agent: 'true'
+      resources:
+        limits:
+          cpus: '0.10'
+          memory: 64M
+        reservations:
+          cpus: '0.05'
+          memory: 32M
+
+networks:
+  traefik:
+    driver: overlay
+    external: true
+
+volumes:
+  db-data:
+    driver: local
+  influx-data:
+    driver: local

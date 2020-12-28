@@ -1,0 +1,10 @@
+---
+    ###
+    # deploy all docker stacks playbook
+    ##
+    
+    - import_playbook: deploy-01-swarm-services.yml
+      tags: [docker-stacks]
+    
+
+    

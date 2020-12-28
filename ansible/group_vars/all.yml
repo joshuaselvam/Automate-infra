@@ -1,0 +1,59 @@
+---
+###
+# Variables default values
+##
+# These variables can be overridden later in other group_vars files
+#
+# Here is the Ansible groups structure:
+#  all
+#  ├── production
+#  ├── staging
+#  └── any_other_remote_environment...
+#
+# Each group has its "_overrides" counterpart, which enables you to override
+#  some variables locally in a xxx_overrides.yml file, which is not versionned
+# Have a look at .sample.yml files to see some examples
+##
+
+  # Environment
+  # Useful variable to perform Jinja2 conditions in your stack templates
+  #  or to pass as an environment variable to your Docker services
+  app_env: production
+  
+  #SSH AUTHORISED KEYS
+  docker_authorized_ssh_keys: []
+   
+  #Mongo DB parameters
+  mongo_hostname: mongo.app.local
+  os_user: mongodb
+  mongo_admin_user: admin
+  mongo_admin_pass: Devops123
+  mongo_packages:
+      - mongodb-org=4.0.10
+      - mongodb-org-server=4.0.10
+      - mongodb-org-shell=4.0.10
+      - mongodb-org-mongos=4.0.10
+      - mongodb-org-tools=4.0.10
+  mongo_databases:
+      - {name: 'mongodb', port: 27017, cacheSizeGB: 2.0 }
+  
+
+  # geerlingguy.docker role configuration
+  docker_edition: ce    
+  #Docker registry
+  docker_registry_hostname: docker.registry.com:5000
+  #S3 Bucket Settings for Docker Registry
+  s3_region: ap-south-1
+  s3_bucketname: dockerregistry18122108
+  
+  # Traefik Settings
+  
+  # If enabled, traefik will use Let's Encrypt to get an SSL certificate automatically
+  # Should be disabled only on local environments (localhost or vagrant)
+  letsencrypt: True
+  #If enabled, traefik will use HTTP to HTTPS redirection 
+  traefik_https: False
+  #traefik domain name. i.e domain name where your application need to be hosted.
+  #It will enabled once letsencrypt is set to true
+  domains_tld: testservice.in
+  domains_tld_local: testservice.local
